@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width"></head>
+<body style="font-family:Arial,Helvetica,sans-serif;max-width:600px;margin:0 auto;padding:16px;color:#333;">
+
+<h3 style="color:#1B3A5C;margin-bottom:4px;">
+  ⚡ Last Hour ({{ start_label }} – {{ end_label }})
+</h3>
+
+{% if new_todos %}
+<h4 style="color:#dc2626;">🔴 New TODOs ({{ new_todos|length }})</h4>
+<table style="width:100%;border-collapse:collapse;" cellpadding="6">
+  {% for todo in new_todos %}
+  {% set urg = todo.get('urgency', 'medium')|lower %}
+  {% set bg = '#fee2e2' if urg == 'high' else '#fef9c3' if urg == 'medium' else '#f3f4f6' %}
+  <tr style="background:{{ bg }};border-bottom:1px solid #e5e7eb;">
+    <td><strong>{{ todo.get('title', '') }}</strong></td>
+    <td>{{ urg|title }}</td>
+    <td>{{ todo.get('due_date', '') or '—' }}</td>
+  </tr>
+  <tr>
+    <td colspan="3" style="color:#666;font-size:13px;padding:4px 6px 12px;">
+      💬 <em>"{{ todo.get('source_message', '')[:200] }}"</em>
+      — {{ todo.get('source_author', '') }}
+      {% if todo.get('source_permalink') %}
+      <a href="{{ todo.source_permalink }}">[thread]</a>
+      {% endif %}
+    </td>
+  </tr>
+  {% endfor %}
+</table>
+{% endif %}
+
+{% if awaiting_response %}
+<h4 style="color:#d97706;">💬 Awaiting Your Response ({{ awaiting_response|length }})</h4>
+{% for t in awaiting_response %}
+<p style="margin:4px 0;">
+  <strong>{{ t.get('channel_name', '') }}</strong> —
+  {{ t.get('summary', '') or t.get('root_text', '')[:200] }}
+</p>
+{% endfor %}
+{% endif %}
+
+{% if fyi %}
+<h4 style="color:#2563eb;">📌 FYI Mentions ({{ fyi|length }})</h4>
+<ul style="margin:0;padding-left:20px;">
+{% for t in fyi %}
+  <li><strong>{{ t.get('channel_name', '') }}</strong> —
+    {{ t.get('summary', '') or t.get('root_text', '')[:150] }}</li>
+{% endfor %}
+</ul>
+{% endif %}
+
+<h4 style="color:#444;">📊 Channel Activity</h4>
+<table cellpadding="4">
+{% for channel, count in stats.channel_volumes|dictsort(by='value', reverse=true) %}
+  {% if count >= 3 %}
+  <tr><td>{{ channel }}</td><td>{{ count }} msgs</td></tr>
+  {% endif %}
+{% endfor %}
+{% set quiet_channels = [] %}
+{% set quiet_msgs = 0 %}
+{% for channel, count in stats.channel_volumes.items() %}
+  {% if count < 3 %}
+    {% set _ = quiet_channels.append(channel) %}
+    {% set quiet_msgs = quiet_msgs + count %}
+  {% endif %}
+{% endfor %}
+{% if quiet_channels|length > 0 %}
+  <tr>
+    <td style="color:#999">{{ quiet_channels|length }} other channels</td>
+    <td style="color:#999">{{ quiet_msgs }} msgs combined</td>
+  </tr>
+{% endif %}
+</table>
+
+<p style="border-top:1px solid #e5e7eb;padding-top:8px;color:#666;margin-top:16px;">
+  📋 <strong>{{ total_open_todos }} open TODOs</strong>
+  ({{ urgency_counts.get('high', 0) }} high,
+   {{ urgency_counts.get('medium', 0) }} medium,
+   {{ urgency_counts.get('low', 0) }} low)
+  {% if sheet_url %}· <a href="{{ sheet_url }}">Open sheet →</a>{% endif %}
+</p>
+
+</body>
+</html>
