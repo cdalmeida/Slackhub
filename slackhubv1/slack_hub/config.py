@@ -123,6 +123,7 @@ class TodoConfig:
     sheet_id: str = ""
     sheet_name: str = "Slack Hub TODOs"
     google_credentials_path: str = "~/.slack-hub/google-creds.json"
+    webhook_url: str = ""
 
 
 @dataclass
@@ -321,6 +322,7 @@ def load_config(path: Optional[str | Path] = None) -> Config:
             google_credentials_path=todo_raw.get(
                 "google_credentials_path", "~/.slack-hub/google-creds.json"
             ),
+            webhook_url=todo_raw.get("webhook_url", ""),
         ),
         email=EmailConfig(
             daily_digest=EmailDigestConfig(
@@ -431,6 +433,7 @@ def save_config(config: Config, path: str | Path) -> None:
             "sheet_id": config.todo.sheet_id,
             "sheet_name": config.todo.sheet_name,
             "google_credentials_path": config.todo.google_credentials_path,
+            "webhook_url": config.todo.webhook_url,
         },
         "email": {
             "daily_digest": {

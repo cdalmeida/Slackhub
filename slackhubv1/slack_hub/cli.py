@@ -132,11 +132,42 @@ def init(ctx):
     # Google Sheets
     console.print()
     console.print("[bold]Google Sheets TODO List[/bold]")
-    config.todo.sheet_id = click.prompt(
-        "Google Sheet ID (from the URL, or press Enter to skip)",
-        default=config.todo.sheet_id or "",
-        show_default=False,
+    console.print("  Choose how to connect to Google Sheets:")
+    console.print("  [1] Apps Script webhook (no service account needed)")
+    console.print("  [2] Service account (requires Google Cloud project)")
+    console.print("  [3] Skip (use local TODO list only)")
+    sheets_choice = click.prompt(
+        "  Option",
+        type=click.Choice(["1", "2", "3"]),
+        default="3",
+        show_default=True,
     )
+    if sheets_choice == "1":
+        console.print()
+        console.print("  To set up the webhook:")
+        console.print("  1. Create a Google Sheet")
+        console.print("  2. Extensions > Apps Script")
+        console.print("  3. Paste the script from slack_hub/apps_script.js")
+        console.print("  4. Deploy > New Deployment > Web app")
+        console.print("  5. Execute as: Me, Access: Anyone")
+        console.print("  6. Copy the deployment URL")
+        console.print()
+        config.todo.webhook_url = click.prompt(
+            "  Apps Script deployment URL",
+            default=config.todo.webhook_url or "",
+            show_default=False,
+        )
+        config.todo.sheet_id = ""
+    elif sheets_choice == "2":
+        config.todo.sheet_id = click.prompt(
+            "  Google Sheet ID (from the URL)",
+            default=config.todo.sheet_id or "",
+            show_default=False,
+        )
+        config.todo.webhook_url = ""
+    else:
+        config.todo.sheet_id = ""
+        config.todo.webhook_url = ""
 
     # Email
     console.print()

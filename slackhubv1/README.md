@@ -26,7 +26,9 @@ Automated Slack triage, TODO management, and activity digests for busy product m
   - **OpenAI** -- GPT-4o / GPT-4o-mini (good all-around, Azure OpenAI supported via `openai_base_url`)
   - **Anthropic** -- Claude Sonnet / Haiku (best summarization quality)
   - **Ollama** -- Local models (air-gapped, free, lower quality)
-- **Google Service Account** with Sheets API access (optional -- falls back to local display)
+- **Google Sheets** (optional -- falls back to local TODO display). Two connection methods:
+  - **Apps Script webhook** -- no service account or admin permissions needed
+  - **Service account** -- requires a Google Cloud project with Sheets API enabled
 
 ## Quick Start
 
@@ -50,6 +52,36 @@ slack-hub channels setup
 # 6. Run your first digest
 slack-hub digest
 ```
+
+## Google Sheets Setup
+
+The init wizard offers three options for the TODO list:
+
+### Option 1: Apps Script Webhook (recommended)
+
+No service account or Google Cloud project required. Works with any Google Workspace account.
+
+1. Create a new Google Sheet at https://sheets.google.com
+2. Go to **Extensions > Apps Script**
+3. Delete the default code and paste the contents of `slack_hub/apps_script.js`
+4. Click **Deploy > New Deployment**
+5. Set type to **Web app**, execute as **Me**, access **Anyone**
+6. Click **Deploy** and copy the deployment URL
+7. Run `slack-hub init` and choose option `[1]`, then paste the URL
+
+### Option 2: Service Account
+
+Requires a Google Cloud project with Sheets API and Drive API enabled.
+
+1. Create a service account in Google Cloud Console
+2. Download the JSON key file to `~/.slack-hub/google-creds.json`
+3. Create a Google Sheet and share it (Editor) with the service account email
+4. Copy the Sheet ID from the URL (the long string between `/d/` and `/edit`)
+5. Run `slack-hub init` and choose option `[2]`, then paste the Sheet ID
+
+### Option 3: Local Only
+
+Skip Google Sheets entirely. TODOs are stored in the local SQLite database and displayed via `slack-hub todos list`.
 
 ## Commands
 
@@ -88,8 +120,9 @@ slackhubv1/
     ingestion.py          # Slack message fetching and normalization
     classifier.py         # LLM orchestration for classification
     digest.py             # Markdown digest generator
-    sheets.py             # Google Sheets sync (with local fallback)
+    sheets.py             # Google Sheets sync (webhook, service account, or local)
     email_digest.py       # Email delivery (Gmail API or SMTP)
+    apps_script.js        # Google Apps Script to deploy in your Sheet
     openai_provider.py    # GPT-4o / GPT-4o-mini provider
     anthropic_provider.py # Claude Sonnet / Haiku provider
     google_provider.py    # Gemini Flash provider
@@ -121,14 +154,14 @@ All settings live in `config/config.yaml`. Key sections:
 - **direct_messages** -- opt-in DM monitoring with allowlist
 - **llm** -- per-task model selection across 4 providers (Google Gemini, OpenAI GPT, Anthropic Claude, Ollama local)
 - **email** -- daily and hourly digest settings with smart suppression
-- **todo** -- Google Sheets ID and auto-complete settings
+- **todo** -- Google Sheets (via webhook URL or service account) and auto-complete settings
 
 See `config/config.example.yaml` for the full template.
 
 ## Architecture
 
 ```
-Slack API -> Ingestion -> SQLite -> Classification (LLM) -> Google Sheets
+Slack API -> Ingestion -> SQLite -> Classification (LLM) -> Google Sheets (webhook or API)
                                                          -> Digest -> Email
 ```
 
@@ -173,6 +206,7 @@ Each task is independently configurable. Example configurations at typical PM vo
 - Slack tokens are user-scoped and stored locally
 - LLM calls can be routed through an internal gateway (via `openai_base_url` for Azure/proxy setups), commercial APIs, or run locally via Ollama
 - Google Sheets credentials are scoped to a single spreadsheet
+- Apps Script webhook runs under your own Google account -- no shared infrastructure
 - All credential files are excluded from version control
 
 ## License

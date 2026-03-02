@@ -212,6 +212,95 @@ class SheetsManager:
         return open_todos
 
 
+class WebhookSheetsManager:
+    """Syncs TODOs to Google Sheets via an Apps Script webhook.
+
+    No service account required -- uses a deployed Apps Script web app
+    that runs under the user's own Google account.
+    """
+
+    def __init__(self, config: Config, db: Database):
+        self.config = config
+        self.db = db
+        self.webhook_url = config.todo.webhook_url
+
+    def _post(self, payload: dict) -> dict:
+        import urllib.request
+        import json
+
+        data = json.dumps(payload).encode("utf-8")
+        req = urllib.request.Request(
+            self.webhook_url,
+            data=data,
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        try:
+            with urllib.request.urlopen(req, timeout=30) as resp:
+                return json.loads(resp.read().decode())
+        except Exception as e:
+            logger.error(f"Webhook POST failed: {e}")
+            return {"status": "error", "message": str(e)}
+
+    def _get(self, action: str) -> dict:
+        import urllib.request
+        import json
+
+        url = f"{self.webhook_url}?action={action}"
+        req = urllib.request.Request(url, method="GET")
+        try:
+            with urllib.request.urlopen(req, timeout=30) as resp:
+                body = resp.read().decode()
+                return json.loads(body)
+        except Exception as e:
+            logger.error(f"Webhook GET failed: {e}")
+            return {"status": "error", "rows": [], "corrections": []}
+
+    def sync_todos(self) -> dict[str, int]:
+        local_todos = self.db.get_all_todos()
+        if not local_todos:
+            return {"created": 0, "updated": 0, "skipped": 0}
+
+        todos_payload = []
+        for todo in local_todos:
+            todos_payload.append({
+                "id": f"TODO-{todo['id']:04d}",
+                "system_status": todo.get("status", "open").title(),
+                "urgency": todo.get("urgency", "medium").title(),
+                "title": todo.get("title", ""),
+                "context": todo.get("context", ""),
+                "source_message": todo.get("source_message", ""),
+                "source_author": todo.get("source_author", ""),
+                "source_channel": todo.get("channel_name", ""),
+                "thread_link": todo.get("source_permalink", ""),
+                "owner": todo.get("owner", ""),
+                "due_date": todo.get("due_date", ""),
+                "created_at": todo.get("created_at", ""),
+                "updated_at": todo.get("updated_at", ""),
+            })
+
+        result = self._post({"action": "sync", "todos": todos_payload})
+        stats = {
+            "created": result.get("created", 0),
+            "updated": result.get("updated", 0),
+            "skipped": result.get("skipped", 0),
+        }
+        logger.info(
+            f"Webhook sheet sync: {stats['created']} created, "
+            f"{stats['updated']} updated, {stats['skipped']} skipped"
+        )
+        return stats
+
+    def get_corrections(self, limit: int = 20) -> list[dict]:
+        result = self._get("corrections")
+        corrections = result.get("corrections", [])
+        return corrections[-limit:]
+
+    def get_open_todos_for_digest(self) -> list[dict]:
+        result = self._get("open")
+        return result.get("rows", [])
+
+
 class LocalSheetsManager:
     """Fallback TODO display when Google Sheets is not configured.
 
@@ -244,8 +333,19 @@ class LocalSheetsManager:
         ]
 
 
-def get_sheets_manager(config: Config, db: Database) -> SheetsManager | LocalSheetsManager:
-    """Factory that returns SheetsManager if configured, else LocalSheetsManager."""
+def get_sheets_manager(
+    config: Config, db: Database,
+) -> SheetsManager | WebhookSheetsManager | LocalSheetsManager:
+    """Factory that returns the appropriate Sheets manager.
+
+    Priority: webhook URL > service account > local fallback.
+    """
+    if config.todo.webhook_url:
+        try:
+            return WebhookSheetsManager(config, db)
+        except Exception as e:
+            logger.warning(f"Webhook Sheets unavailable, using local: {e}")
+            return LocalSheetsManager(config, db)
     if config.todo.sheet_id:
         try:
             return SheetsManager(config, db)
