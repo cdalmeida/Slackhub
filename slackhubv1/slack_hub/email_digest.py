@@ -17,21 +17,13 @@ from .digest import DigestGenerator
 
 logger = logging.getLogger(__name__)
 
-TEMPLATES_DIR = Path(__file__).parent.parent.parent / "templates"
+TEMPLATES_DIR = Path(__file__).parent / "templates"
 
 
 def _get_jinja_env() -> Environment:
     """Create a Jinja2 environment pointing at the templates directory."""
-    template_dirs = [
-        TEMPLATES_DIR,
-        Path(__file__).parent / "templates",
-        Path("templates"),
-    ]
-    # Use the first directory that exists
-    for d in template_dirs:
-        if d.exists():
-            return Environment(loader=FileSystemLoader(str(d)), autoescape=True)
-    # Fallback: create env with inline templates
+    if TEMPLATES_DIR.exists():
+        return Environment(loader=FileSystemLoader(str(TEMPLATES_DIR)), autoescape=True)
     return Environment(autoescape=True)
 
 

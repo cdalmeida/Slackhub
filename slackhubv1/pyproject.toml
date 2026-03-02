@@ -1,6 +1,6 @@
 [build-system]
 requires = ["setuptools>=68.0", "wheel"]
-build-backend = "setuptools.backends._legacy:_Backend"
+build-backend = "setuptools.build_meta"
 
 [project]
 name = "slack-hub"
@@ -22,6 +22,7 @@ dependencies = [
     "google-auth-oauthlib>=1.2.0",
     "google-api-python-client>=2.110.0",
     "gspread>=6.0.0",
+    "gspread-formatting>=1.1.0",
     "jinja2>=3.1.0",
     "rich>=13.7.0",
     "emoji>=2.9.0",
@@ -43,7 +44,10 @@ local = [
 slack-hub = "slack_hub.cli:cli"
 
 [tool.setuptools.packages.find]
-where = ["src"]
+where = ["."]
+
+[tool.setuptools.package-data]
+slack_hub = ["templates/*.j2"]
 
 [tool.ruff]
 line-length = 100

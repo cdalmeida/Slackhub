@@ -10,14 +10,14 @@ from typing import Optional
 
 from .config import Config
 from .db import Database
-from .llm import Classification, TodoExtraction
+from . import Classification, TodoExtraction
 
 logger = logging.getLogger(__name__)
 
 
 def _make_openai_provider(config: Config, classification_model: str, summary_model: str):
     """Helper to create an OpenAI provider instance."""
-    from .llm.openai_provider import OpenAIProvider
+    from .openai_provider import OpenAIProvider
     return OpenAIProvider(
         api_key=config.llm.openai_api_key,
         classification_model=classification_model,
@@ -30,13 +30,13 @@ def _get_classification_provider(config: Config):
     """Instantiate the provider configured for classification."""
     task = config.llm.classification
     if task.provider == "google":
-        from .llm.google_provider import GoogleProvider
+        from .google_provider import GoogleProvider
         return GoogleProvider(
             api_key=config.llm.google_api_key,
             model=task.model,
         )
     elif task.provider == "anthropic":
-        from .llm.anthropic_provider import AnthropicProvider
+        from .anthropic_provider import AnthropicProvider
         return AnthropicProvider(
             api_key=config.llm.anthropic_api_key,
             extraction_model=task.model,
@@ -45,7 +45,7 @@ def _get_classification_provider(config: Config):
     elif task.provider == "openai":
         return _make_openai_provider(config, task.model, config.llm.summarization.model)
     else:
-        from .llm.ollama_provider import OllamaProvider
+        from .ollama_provider import OllamaProvider
         return OllamaProvider(model=task.model)
 
 
@@ -53,19 +53,19 @@ def _get_extraction_provider(config: Config):
     """Instantiate the provider configured for TODO extraction."""
     task = config.llm.extraction
     if task.provider == "anthropic":
-        from .llm.anthropic_provider import AnthropicProvider
+        from .anthropic_provider import AnthropicProvider
         return AnthropicProvider(
             api_key=config.llm.anthropic_api_key,
             extraction_model=task.model,
             summary_model=config.llm.summarization.model,
         )
     elif task.provider == "google":
-        from .llm.google_provider import GoogleProvider
+        from .google_provider import GoogleProvider
         return GoogleProvider(api_key=config.llm.google_api_key, model=task.model)
     elif task.provider == "openai":
         return _make_openai_provider(config, task.model, config.llm.summarization.model)
     else:
-        from .llm.ollama_provider import OllamaProvider
+        from .ollama_provider import OllamaProvider
         return OllamaProvider(model=task.model)
 
 
@@ -73,19 +73,19 @@ def _get_summary_provider(config: Config):
     """Instantiate the provider configured for summarization."""
     task = config.llm.summarization
     if task.provider == "anthropic":
-        from .llm.anthropic_provider import AnthropicProvider
+        from .anthropic_provider import AnthropicProvider
         return AnthropicProvider(
             api_key=config.llm.anthropic_api_key,
             extraction_model=config.llm.extraction.model,
             summary_model=task.model,
         )
     elif task.provider == "google":
-        from .llm.google_provider import GoogleProvider
+        from .google_provider import GoogleProvider
         return GoogleProvider(api_key=config.llm.google_api_key, model=task.model)
     elif task.provider == "openai":
         return _make_openai_provider(config, config.llm.classification.model, task.model)
     else:
-        from .llm.ollama_provider import OllamaProvider
+        from .ollama_provider import OllamaProvider
         return OllamaProvider(model=task.model)
 
 
@@ -93,10 +93,10 @@ def _get_resolution_provider(config: Config):
     """Instantiate the provider configured for resolution detection."""
     task = config.llm.resolution
     if task.provider == "google":
-        from .llm.google_provider import GoogleProvider
+        from .google_provider import GoogleProvider
         return GoogleProvider(api_key=config.llm.google_api_key, model=task.model)
     elif task.provider == "anthropic":
-        from .llm.anthropic_provider import AnthropicProvider
+        from .anthropic_provider import AnthropicProvider
         return AnthropicProvider(
             api_key=config.llm.anthropic_api_key,
             extraction_model=task.model,
@@ -105,7 +105,7 @@ def _get_resolution_provider(config: Config):
     elif task.provider == "openai":
         return _make_openai_provider(config, task.model, config.llm.summarization.model)
     else:
-        from .llm.ollama_provider import OllamaProvider
+        from .ollama_provider import OllamaProvider
         return OllamaProvider(model=task.model)
 
 

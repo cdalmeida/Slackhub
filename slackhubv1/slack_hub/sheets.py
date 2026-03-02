@@ -82,9 +82,6 @@ class SheetsManager:
         })
         self.sheet.freeze(rows=1)
 
-        # Data validation for Manual Status (column B)
-        from gspread_formatting import DataValidationRule, BooleanCondition
-        # Note: gspread's built-in validation works too
         logger.info("Sheet initialized with headers and formatting.")
 
     def sync_todos(self) -> dict[str, int]:
