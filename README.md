@@ -15,8 +15,8 @@ Automated Slack triage, TODO management, and activity digests for busy product m
 
 ```bash
 # 1. Clone
-git clone https://github.intuit.com/carlos/slack-hub.git
-cd slack-hub
+git clone https://github.com/cdalmeida/Slackhub
+cd Slackhub
 
 # 2. Install (creates venv, installs deps, initializes DB)
 make install
