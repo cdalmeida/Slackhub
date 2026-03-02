@@ -83,6 +83,17 @@ Requires a Google Cloud project with Sheets API and Drive API enabled.
 
 Skip Google Sheets entirely. TODOs are stored in the local SQLite database and displayed via `slack-hub todos list`.
 
+## Enterprise Grid / Restricted Workspaces
+
+Some Slack Enterprise Grid workspaces restrict channel listing APIs (`conversations.list` and `users.conversations`). If you see an `enterprise_is_restricted` error during `slack-hub channels setup`, the tool automatically switches to **manual entry mode**.
+
+In manual mode, you enter each channel as `#channel-name CHANNEL_ID`. To find a channel's ID:
+
+1. Right-click the channel name in Slack → **View channel details**
+2. Scroll to the bottom — the **Channel ID** is displayed (e.g. `C01AB2CDE`)
+
+Or: right-click → **Copy link** — the ID is the last path segment of the URL.
+
 ## Commands
 
 | Command | Description |

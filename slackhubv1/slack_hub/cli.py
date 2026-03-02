@@ -232,47 +232,64 @@ def channels_setup(ctx):
     from .ingestion import SlackIngester
     ingester = SlackIngester(config, db)
 
+    channels = None
+    api_restricted = False
+
     console.print("Fetching your channels from Slack...")
-    channels = ingester.list_user_channels()
-
-    if not channels:
-        console.print("[red]No channels found. Check your Slack token.[/red]")
-        return
-
-    console.print(f"\nFound {len(channels)} channels. Select ones to monitor:\n")
+    try:
+        channels = ingester.list_user_channels()
+    except Exception as exc:
+        if "enterprise_is_restricted" in str(exc):
+            api_restricted = True
+            console.print(
+                "\n[yellow]⚠  Your Slack workspace restricts channel listing APIs.[/yellow]"
+            )
+            console.print("Switching to manual entry mode.\n")
+        else:
+            raise
 
     selected = {"high_priority": [], "medium_priority": [], "low_priority": []}
 
-    for i, ch in enumerate(channels[:40]):  # Cap at 40 for interactive UX
-        console.print(
-            f"  [{i+1:2d}] {ch['name']} ({ch['num_members']} members)"
-            f"{'  — ' + ch['topic'][:50] if ch['topic'] else ''}"
-        )
+    if api_restricted or not channels:
+        _manual_channel_setup(selected)
+    else:
+        console.print(f"\nFound {len(channels)} channels. Select ones to monitor:\n")
 
-    console.print()
-    console.print("Enter channel numbers separated by commas for each tier.")
-    console.print("Press Enter to skip a tier.\n")
+        for i, ch in enumerate(channels[:40]):
+            console.print(
+                f"  [{i+1:2d}] {ch['name']} ({ch['num_members']} members)"
+                f"{'  — ' + ch['topic'][:50] if ch['topic'] else ''}"
+            )
 
-    for tier, label in [
-        ("high_priority", "High priority (polled every 10 min)"),
-        ("medium_priority", "Medium priority (polled every 30 min)"),
-        ("low_priority", "Low priority (polled every 60 min)"),
-    ]:
-        raw = click.prompt(f"  {label}", default="", show_default=False)
-        if raw.strip():
-            indices = [int(x.strip()) - 1 for x in raw.split(",") if x.strip().isdigit()]
-            for idx in indices:
-                if 0 <= idx < len(channels):
-                    ch = channels[idx]
-                    from .config import ChannelEntry
-                    selected[tier].append(ChannelEntry(name=ch["name"], id=ch["id"]))
+        console.print()
+        console.print("Enter channel numbers separated by commas for each tier.")
+        console.print("Press Enter to skip a tier.\n")
+
+        for tier, label in [
+            ("high_priority", "High priority (polled every 10 min)"),
+            ("medium_priority", "Medium priority (polled every 30 min)"),
+            ("low_priority", "Low priority (polled every 60 min)"),
+        ]:
+            raw = click.prompt(f"  {label}", default="", show_default=False)
+            if raw.strip():
+                indices = [int(x.strip()) - 1 for x in raw.split(",") if x.strip().isdigit()]
+                for idx in indices:
+                    if 0 <= idx < len(channels):
+                        ch = channels[idx]
+                        from .config import ChannelEntry
+                        selected[tier].append(ChannelEntry(name=ch["name"], id=ch["id"]))
 
     config.channels = selected
 
     # DM setup
-    if click.confirm("\nAlso configure direct message monitoring?", default=False):
+    if not api_restricted and click.confirm(
+        "\nAlso configure direct message monitoring?", default=False
+    ):
         config.direct_messages.enabled = True
-        dms = ingester.list_user_dms()
+        try:
+            dms = ingester.list_user_dms()
+        except Exception:
+            dms = []
         if dms:
             console.print(f"\nFound {len(dms)} DM conversations:\n")
             for i, dm in enumerate(dms[:20]):
@@ -294,6 +311,48 @@ def channels_setup(ctx):
     total = sum(len(v) for v in selected.values())
     dm_count = len(config.direct_messages.allowlist)
     console.print(f"\n[green]✓[/green] Saved {total} channels and {dm_count} DMs to {config_path}")
+
+
+def _manual_channel_setup(selected: dict) -> None:
+    """Prompt the user to manually enter channel names and IDs."""
+    from .config import ChannelEntry
+
+    console.print("To find a channel ID in Slack:")
+    console.print("  1. Right-click a channel name → 'View channel details'")
+    console.print("  2. Scroll to the bottom — the Channel ID is shown (e.g. C01AB2CDE)")
+    console.print("  Or: right-click → 'Copy link' — the ID is the last segment of the URL.\n")
+
+    for tier, label in [
+        ("high_priority", "High priority (polled every 10 min)"),
+        ("medium_priority", "Medium priority (polled every 30 min)"),
+        ("low_priority", "Low priority (polled every 60 min)"),
+    ]:
+        console.print(f"[bold]{label}[/bold]")
+        console.print("Enter channels one per line as:  #channel-name  CHANNEL_ID")
+        console.print("Leave blank and press Enter when done.\n")
+
+        while True:
+            line = click.prompt(f"  {tier}", default="", show_default=False)
+            if not line.strip():
+                break
+            parts = line.strip().split()
+            if len(parts) >= 2:
+                name = parts[0] if parts[0].startswith("#") else f"#{parts[0]}"
+                ch_id = parts[1]
+                selected[tier].append(ChannelEntry(name=name, id=ch_id))
+                console.print(f"    [green]+ Added {name} ({ch_id})[/green]")
+            elif len(parts) == 1:
+                val = parts[0]
+                if val.startswith("C") and len(val) >= 9:
+                    selected[tier].append(ChannelEntry(name=val, id=val))
+                    console.print(f"    [green]+ Added {val} (name will resolve on first fetch)[/green]")
+                else:
+                    name = val if val.startswith("#") else f"#{val}"
+                    console.print(
+                        f"    [yellow]Need the channel ID too. "
+                        f"Enter as: {name} C01XXXXXXX[/yellow]"
+                    )
+        console.print()
 
 
 # ── Fetch ───────────────────────────────────────────────────────────────────

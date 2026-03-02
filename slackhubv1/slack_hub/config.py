@@ -455,6 +455,7 @@ def save_config(config: Config, path: str | Path) -> None:
         "thread_depth": config.thread_depth,
         "db_path": config.db_path,
         "log_level": config.log_level,
+        "slack_token": config.slack_token,
     }
 
     with open(path, "w") as f:

@@ -459,26 +459,33 @@ class SlackIngester:
     # ── Channel discovery (for interactive setup) ───────────────────────
 
     def list_user_channels(self) -> list[dict]:
-        """List all channels the user is a member of, sorted by activity."""
+        """List all channels the user is a member of, sorted by activity.
+
+        Uses users_conversations instead of conversations_list to work
+        on Enterprise Grid workspaces where the latter is restricted.
+        """
         channels = []
         cursor = None
 
         while True:
             self.rate_limiter.wait_if_needed()
-            kwargs = {"types": "public_channel,private_channel", "limit": 200}
+            kwargs = {
+                "types": "public_channel,private_channel",
+                "limit": 200,
+                "exclude_archived": True,
+            }
             if cursor:
                 kwargs["cursor"] = cursor
 
-            result = self.client.conversations_list(**kwargs)
+            result = self.client.users_conversations(**kwargs)
 
             for ch in result.get("channels", []):
-                if ch.get("is_member"):
-                    channels.append({
-                        "id": ch["id"],
-                        "name": f"#{ch['name']}",
-                        "num_members": ch.get("num_members", 0),
-                        "topic": ch.get("topic", {}).get("value", ""),
-                    })
+                channels.append({
+                    "id": ch["id"],
+                    "name": f"#{ch['name']}",
+                    "num_members": ch.get("num_members", 0),
+                    "topic": ch.get("topic", {}).get("value", ""),
+                })
 
             cursor = result.get("response_metadata", {}).get("next_cursor")
             if not cursor:
@@ -492,7 +499,7 @@ class SlackIngester:
 
         # 1:1 DMs
         self.rate_limiter.wait_if_needed()
-        result = self.client.conversations_list(types="im", limit=200)
+        result = self.client.users_conversations(types="im", limit=200)
         for im in result.get("channels", []):
             user_id = im.get("user", "")
             if user_id and user_id != self.config.user_id:
@@ -505,7 +512,7 @@ class SlackIngester:
 
         # Group DMs
         self.rate_limiter.wait_if_needed()
-        result = self.client.conversations_list(types="mpim", limit=200)
+        result = self.client.users_conversations(types="mpim", limit=200)
         for mpim in result.get("channels", []):
             dms.append({
                 "id": mpim["id"],
