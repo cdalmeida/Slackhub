@@ -1,103 +1,143 @@
-# Slackhub
+# Slack Intelligence Hub
 
-Slackhub bridges **Slack** and **GitHub** — receive GitHub notifications in Slack channels, create issues, review pull requests, and interact with your repositories directly from Slack.
+Automated Slack triage, TODO management, and activity digests for busy product managers.
 
-## Features
+`slack-hub` continuously monitors your Slack channels, classifies threads by relevance and urgency using LLMs, maintains an auto-updated TODO list in Google Sheets, and delivers scheduled email digests.
 
-- **GitHub → Slack notifications** for issues, pull requests, pushes, and releases
-- **Slash commands** to create issues and inspect pull requests from Slack
-- **Interactive buttons** to approve pull requests without leaving Slack
-- **Automatic link expansion** — paste a GitHub issue or PR URL in Slack and get a rich summary
-- Configurable per-repository Slack channel routing
+## What It Does
 
-## Architecture
-
-```
-Slack (events / commands)
-        │
-        ▼
-  slack-bolt App ──► slack/handler.py   (message handler, slash commands, actions)
-                          │
-                          ▼
-                   github/client.py     (GitHub REST API wrapper)
-
-GitHub Webhooks
-        │
-        ▼
-  Flask Route ──────► github/events.py  (webhook verification & dispatch)
-                          │
-                          ▼
-                   slack/notifier.py    (posts formatted messages to Slack)
-```
+- **On-Demand Digest** — CLI-generated snapshot of channel activity, prioritized by relevance
+- **Auto-Maintained TODO List** — Google Sheet of action items extracted from Slack, with manual override and feedback loop
+- **Daily Brief** (7 AM) — Full TODO list, overnight summary, activity stats
+- **Hourly Pulse** (11 AM–5 PM) — Lightweight email with new TODOs, mentions, and channel activity
 
 ## Quick Start
 
-### 1. Clone and install
-
 ```bash
-git clone https://github.com/cdalmeida/Slackhub.git
-cd Slackhub
-python -m venv .venv && source .venv/bin/activate
-pip install -r requirements.txt
+# 1. Clone
+git clone https://github.intuit.com/carlos/slack-hub.git
+cd slack-hub
+
+# 2. Install (creates venv, installs deps, initializes DB)
+make install
+
+# 3. Activate the virtual environment
+source .venv/bin/activate
+
+# 4. Interactive setup
+slack-hub init
+
+# 5. Pick your channels
+slack-hub channels setup
+
+# 6. Run your first digest
+slack-hub digest
 ```
 
-### 2. Configure
+## Prerequisites
+
+- **Python 3.11+**
+- **Slack CLI** installed and authenticated (`slack auth token`)
+- **At least one LLM provider API key** (you can mix and match per task):
+  - **Google AI** — Gemini 2.0 Flash (fast + cheap for classification)
+  - **OpenAI** — GPT-4o / GPT-4o-mini (good all-around, Azure OpenAI supported via `openai_base_url`)
+  - **Anthropic** — Claude Sonnet / Haiku (best summarization quality)
+  - **Ollama** — Local models (air-gapped, free, lower quality)
+- **Google Service Account** with Sheets API access (optional — falls back to local display)
+
+## Commands
+
+| Command | Description |
+|---------|-------------|
+| `slack-hub init` | Interactive setup wizard |
+| `slack-hub channels setup` | Pick channels from Slack |
+| `slack-hub channels list` | Show configured channels |
+| `slack-hub fetch` | Fetch messages from Slack |
+| `slack-hub classify` | Run LLM classification |
+| `slack-hub digest` | Full pipeline: fetch → classify → digest |
+| `slack-hub digest --hours 24` | Custom lookback window |
+| `slack-hub todos list` | Show open TODOs |
+| `slack-hub todos done <id>` | Mark TODO as complete |
+| `slack-hub todos dismiss <id>` | Dismiss a TODO |
+| `slack-hub todos refresh` | Check for auto-resolved TODOs |
+| `slack-hub email-digest --type daily` | Send daily brief |
+| `slack-hub email-digest --type hourly` | Send hourly pulse |
+| `slack-hub watch` | Background polling mode |
+| `slack-hub stats` | Activity statistics |
+
+## Scheduling Emails
+
+Add to your crontab (`crontab -e`):
 
 ```bash
-cp .env.example .env
-# Edit .env with your Slack and GitHub credentials
-```
+# Daily brief — 7 AM PT weekdays
+0 7 * * 1-5 /path/to/slack-hub/.venv/bin/slack-hub email-digest --type daily
 
-### 3. Run
-
-```bash
-python app.py
-# or with gunicorn for production:
-gunicorn app:create_app --bind 0.0.0.0:3000
+# Hourly pulse — 11 AM through 5 PM PT weekdays
+0 11-17 * * 1-5 /path/to/slack-hub/.venv/bin/slack-hub email-digest --type hourly
 ```
 
 ## Configuration
 
-| Variable | Required | Description |
-|---|---|---|
-| `SLACK_BOT_TOKEN` | ✅ | Bot OAuth token (`xoxb-...`) |
-| `SLACK_SIGNING_SECRET` | ✅ | Slack app signing secret |
-| `GITHUB_TOKEN` | ✅ | GitHub personal access token |
-| `GITHUB_WEBHOOK_SECRET` | ✅ | Secret for validating webhook payloads |
-| `REPO_CHANNEL_MAP` | ✅ | Comma-separated `owner/repo:#channel` pairs |
-| `PORT` | | HTTP port (default `3000`) |
-| `DEBUG` | | Enable debug mode (default `false`) |
+All settings live in `config/config.yaml`. Key sections:
 
-## Slack App Setup
+- **channels** — organized by priority tier (high/medium/low)
+- **direct_messages** — opt-in DM monitoring with allowlist
+- **llm** — per-task model selection across 4 providers (Google Gemini, OpenAI GPT, Anthropic Claude, Ollama local)
+- **email** — daily and hourly digest settings with smart suppression
+- **todo** — Google Sheets ID and auto-complete settings
 
-1. Create a new Slack app at <https://api.slack.com/apps>
-2. Enable **Event Subscriptions** — set the Request URL to `https://your-host/slack/events`
-3. Subscribe to bot events: `message.channels`, `message.groups`
-4. Add **Slash Commands**: `/gh-issue` and `/gh-pr` pointing to `https://your-host/slack/events`
-5. Enable **Interactivity** — set the Request URL to `https://your-host/slack/events`
-6. Install the app to your workspace and copy the **Bot User OAuth Token**
+See `config/config.example.yaml` for the full template.
 
-## GitHub Webhook Setup
+## Architecture
 
-1. Go to your repository → **Settings → Webhooks → Add webhook**
-2. Payload URL: `https://your-host/github/webhook`
-3. Content type: `application/json`
-4. Secret: the value of `GITHUB_WEBHOOK_SECRET`
-5. Select individual events: _Issues_, _Pull requests_, _Pushes_, _Releases_, _Issue comments_, _Pull request reviews_
-
-## Slash Commands
-
-| Command | Description |
-|---|---|
-| `/gh-issue owner/repo Bug title` | Create a new GitHub issue |
-| `/gh-pr owner/repo 42` | Show details of pull request #42 |
-
-## Running Tests
-
-```bash
-pip install -r requirements-dev.txt
-pytest tests/ -v
 ```
+Slack API → Ingestion → SQLite → Classification (LLM) → Google Sheets
+                                                       → Digest → Email
+```
+
+Everything runs locally. No shared servers. Each user's instance only sees their own channels.
+
+## LLM Cost
+
+Each task is independently configurable. Example configurations at typical PM volumes (~300–500 msgs/day):
+
+**Gemini + OpenAI (recommended if no Anthropic access):**
+
+| Task | Model | ~Cost/Day |
+|------|-------|-----------|
+| Classification | Gemini 2.0 Flash | $0.02–$0.05 |
+| TODO Extraction | GPT-4o-mini | $0.02–$0.06 |
+| Summarization | GPT-4o | $0.10–$0.25 |
+| Resolution Detection | Gemini 2.0 Flash | $0.01–$0.03 |
+| **Total** | | **$0.15–$0.39** |
+
+**Gemini + Anthropic:**
+
+| Task | Model | ~Cost/Day |
+|------|-------|-----------|
+| Classification | Gemini 2.0 Flash | $0.02–$0.05 |
+| TODO Extraction | Claude Haiku 4.5 | $0.03–$0.08 |
+| Summarization | Claude Sonnet 4.5 | $0.10–$0.30 |
+| Resolution Detection | Gemini 2.0 Flash | $0.01–$0.03 |
+| **Total** | | **$0.16–$0.46** |
+
+**All-OpenAI:**
+
+| Task | Model | ~Cost/Day |
+|------|-------|-----------|
+| Classification | GPT-4o-mini | $0.02–$0.06 |
+| TODO Extraction | GPT-4o-mini | $0.02–$0.06 |
+| Summarization | GPT-4o | $0.10–$0.25 |
+| Resolution Detection | GPT-4o-mini | $0.01–$0.03 |
+| **Total** | | **$0.15–$0.40** |
+
+## Security
+
+- Slack tokens are user-scoped and stored locally
+- LLM calls can be routed through an internal gateway (via `openai_base_url` for Azure/proxy setups), commercial APIs, or run locally via Ollama
+- Google Sheets credentials are scoped to a single spreadsheet
+- All credential files are excluded from version control
 
 ## License
 
